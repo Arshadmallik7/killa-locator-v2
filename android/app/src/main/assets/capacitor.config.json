@@ -1,0 +1,11 @@
+{
+	"appId": "pk.killa.locator",
+	"appName": "Killa Locator",
+	"webDir": "www",
+	"server": {
+		"androidScheme": "https"
+	},
+	"android": {
+		"allowMixedContent": false
+	}
+}
