@@ -1,0 +1,15 @@
+{
+  "name": "killa-locator",
+  "version": "2.0.0",
+  "private": true,
+  "description": "Offline murabba/killa locator with satellite basemap",
+  "scripts": {
+    "sync": "cap sync android"
+  },
+  "dependencies": {
+    "@capacitor/android": "^8.5.3",
+    "@capacitor/cli": "^8.5.3",
+    "@capacitor/core": "^8.5.3",
+    "@capacitor/geolocation": "^8.2.4"
+  }
+}
