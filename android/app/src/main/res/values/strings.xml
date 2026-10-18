@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Killa Locator</string>
+    <string name="title_activity_main">Killa Locator</string>
+    <string name="package_name">pk.killa.locator</string>
+    <string name="custom_url_scheme">pk.killa.locator</string>
+</resources>
