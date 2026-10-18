@@ -1,0 +1,1499 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0f3d2e">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<title>Killa Locator</title>
+<style>
+/* Layout: full-height phone app. Top bar, map canvas, bottom sheet with the murabba/killa answer. */
+:root {
+  --bar: #0f3d2e; --bar-ink: #e9f3ec;
+  --bg: #e8ece6; --parcel: #6b7d70; --t0: rgba(255,255,255,.55); --t1: rgba(190,214,196,.50); --t2: rgba(225,232,205,.55); --t3: rgba(205,222,226,.50);
+  --sheet: #ffffff; --ink: #14211a; --muted: #55645a; --line: #d6ddd7; --halo: #ffffff;
+  --accent: #1558c9; --accent-ink: #ffffff; --hit: #f5b324; --hit-edge: #8a5a00; --warn-bg: #fff3d6; --warn-ink: #5c3b00; --bad: #a3271f;
+  --chip: rgba(255,255,255,.14);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bar: #0b2a20; --bg: #11181a; --parcel: #5f7b69; --t0: rgba(255,255,255,.05); --t1: rgba(120,170,140,.16); --t2: rgba(170,180,110,.14); --t3: rgba(110,160,175,.16);
+    --sheet: #172024; --ink: #e8efe9; --muted: #9db0a3; --line: #2a3a33; --halo: #11181a;
+    --accent: #5aa2ff; --accent-ink: #06182e; --hit: #f0b429; --hit-edge: #ffd77a; --warn-bg: #3a2e12; --warn-ink: #ffe3a1; --bad: #ff8f86;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bar: #0b2a20; --bg: #11181a; --parcel: #5f7b69; --t0: rgba(255,255,255,.05); --t1: rgba(120,170,140,.16); --t2: rgba(170,180,110,.14); --t3: rgba(110,160,175,.16);
+  --sheet: #172024; --ink: #e8efe9; --muted: #9db0a3; --line: #2a3a33; --halo: #11181a;
+  --accent: #5aa2ff; --accent-ink: #06182e; --hit: #f0b429; --hit-edge: #ffd77a; --warn-bg: #3a2e12; --warn-ink: #ffe3a1; --bad: #ff8f86;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; padding: 0; overscroll-behavior: none; }
+body { background: var(--bg); color: var(--ink); font: 15px/1.35 system-ui, -apple-system, "Segoe UI", Roboto, "Noto Naskh Arabic", "Noto Sans Arabic", sans-serif; -webkit-tap-highlight-color: transparent; }
+#app { height: 100%; display: grid; grid-template-rows: auto minmax(0, 1fr); grid-template-columns: minmax(0, 1fr); }
+#top { background: var(--bar); color: var(--bar-ink); position: relative; z-index: 6;
+  padding: calc(env(safe-area-inset-top, 0px) + 6px) max(10px, env(safe-area-inset-right, 0px)) 6px max(10px, env(safe-area-inset-left, 0px)); }
+#searchrow { display: flex; align-items: center; gap: 8px; }
+#sform { flex: 1; min-width: 0; position: relative; display: flex; }
+#q { flex: 1; min-width: 0; height: 42px; border-radius: 12px; border: 0; padding: 0 78px 0 14px; font: inherit; font-size: 16px; background: var(--sheet); color: var(--ink); }
+#q::placeholder { color: var(--muted); }
+#qclear, #qgo { position: absolute; top: 3px; width: 36px; height: 36px; border: 0; background: none; color: var(--muted); display: grid; place-items: center; padding: 0; border-radius: 10px; }
+#qclear { right: 38px; font-size: 24px; line-height: 1; }
+#qclear[hidden] { display: none; }
+#qgo { right: 2px; color: var(--accent); }
+#qgo svg { width: 22px; height: 22px; stroke: currentColor; fill: none; stroke-width: 2.2; stroke-linecap: round; }
+#chips { display: flex; gap: 6px; align-items: center; flex: none; }
+.chip[hidden] { display: none; }
+#qmsg { margin-top: 6px; font-size: 13.5px; color: #ffd9a8; }
+#qmsg[hidden], #qres[hidden] { display: none; }
+#qres { list-style: none; margin: 4px 0 0; padding: 4px; position: absolute; left: max(10px, env(safe-area-inset-left, 0px)); right: max(10px, env(safe-area-inset-right, 0px)); top: 100%; background: var(--sheet); color: var(--ink);
+  border-radius: 12px; box-shadow: 0 6px 20px rgba(0,0,0,.35); max-height: 55vh; overflow-y: auto; z-index: 8; }
+#qres button { width: 100%; text-align: left; border: 0; background: none; color: inherit; font: inherit; padding: 10px 12px; min-height: 44px; border-radius: 8px; }
+#qres button:active { background: var(--line); }
+#qres small { color: var(--muted); margin-inline-start: 6px; }
+.chip { background: var(--chip); border-radius: 99px; padding: 3px 10px; font-size: 12px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.chip.ok { background: rgba(120, 220, 150, .25); }
+.chip.bad { background: rgba(255, 140, 120, .3); }
+#mapwrap { --barh: 76px; position: relative; min-height: 0; background: var(--bg); overflow: hidden; }
+#map { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; display: block; }
+#fab { position: absolute; right: max(10px, env(safe-area-inset-right, 0px)); top: 10px; display: flex; flex-direction: column; gap: 8px; }
+#fab button { width: 46px; height: 46px; border-radius: 12px; border: 1px solid var(--line); background: var(--sheet); color: var(--ink); display: grid; place-items: center; padding: 0; box-shadow: 0 1px 3px rgba(0,0,0,.25); }
+#fab button svg { width: 24px; height: 24px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+#fab button[aria-pressed="true"], #fab button.on { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+#toast { position: absolute; left: 50%; top: 12px; transform: translateX(-50%); max-width: min(80%, 420px); background: rgba(20,33,26,.92); color: #fff; padding: 8px 14px; border-radius: 10px; font-size: 14px; text-align: center; pointer-events: none; z-index: 5; }
+#attr { position: absolute; left: 6px; bottom: calc(var(--barh, 0px) + 4px); font-size: 10.5px; color: var(--ink); background: color-mix(in srgb, var(--sheet) 72%, transparent); padding: 1px 6px; border-radius: 6px; pointer-events: none; max-width: 70%; }
+#attr:empty { display: none; }
+/* map layers panel */
+#layers { position: absolute; right: calc(max(10px, env(safe-area-inset-right, 0px)) + 56px); top: 10px; width: min(300px, calc(100% - 90px)); max-height: calc(100% - 20px); overflow-y: auto;
+  background: var(--sheet); border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 4px 16px rgba(0,0,0,.3); padding: 10px 12px 12px; z-index: 4; }
+#layers[hidden] { display: none; }
+.ptitle { display: flex; justify-content: space-between; align-items: center; font-weight: 700; margin-bottom: 4px; }
+.ptitle .x { border: 0; background: none; color: var(--muted); font-size: 22px; line-height: 1; padding: 4px 8px; min-height: 36px; }
+.opt { display: flex; align-items: center; gap: 10px; min-height: 40px; }
+.opt input { width: 20px; height: 20px; accent-color: var(--accent); }
+.row { display: flex; align-items: center; gap: 10px; min-height: 40px; justify-content: space-between; }
+.row input[type=range] { flex: 1; accent-color: var(--accent); min-width: 0; }
+.sub { font-weight: 650; margin: 10px 0 2px; padding-top: 8px; border-top: 1px solid var(--line); }
+.small { color: var(--muted); font-size: 12.5px; margin: 4px 0 0; }
+#pad { display: grid; grid-template-columns: repeat(3, 44px); grid-template-rows: repeat(3, 44px); gap: 4px; justify-content: center; margin: 6px 0; }
+#pad button { border: 1px solid var(--line); background: var(--sheet); color: var(--ink); border-radius: 10px; font-size: 20px; padding: 0; }
+#pad button:active { background: var(--accent); color: var(--accent-ink); }
+select { font: inherit; padding: 8px; border-radius: 8px; border: 1px solid var(--line); background: var(--sheet); color: var(--ink); min-height: 40px; }
+#sheet { position: absolute; left: 0; right: 0; bottom: 0; z-index: 3; display: flex; flex-direction: column; max-height: 82%; background: var(--sheet);
+  border-top: 1px solid var(--line); border-radius: 16px 16px 0 0; box-shadow: 0 -2px 14px rgba(0,0,0,.28); }
+#bar { flex: none; cursor: pointer; touch-action: none; user-select: none; -webkit-user-select: none;
+  padding: 6px max(14px, env(safe-area-inset-right, 0px)) calc(8px + env(safe-area-inset-bottom, 0px)) max(14px, env(safe-area-inset-left, 0px)); }
+.grip { width: 38px; height: 4px; border-radius: 2px; background: var(--line); margin: 0 auto 6px; }
+#barrow { display: flex; align-items: center; gap: 12px; min-height: 52px; }
+.bcell { text-align: center; min-width: 52px; }
+.bk { display: block; font-size: 11px; color: var(--muted); }
+.bcell b { font-size: 28px; line-height: 1.05; font-variant-numeric: tabular-nums; }
+#btext { flex: 1; min-width: 0; }
+#bVillage { display: block; font-weight: 650; font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#bInfo { display: block; color: var(--muted); font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#bSave { padding: 8px 14px; min-height: 40px; }
+.chev { color: var(--muted); font-size: 14px; transition: transform .15s; }
+#sheet.open .chev { transform: rotate(180deg); }
+#detail { display: none; overflow-y: auto; border-top: 1px solid var(--line); padding: 12px max(14px, env(safe-area-inset-right, 0px)) calc(12px + env(safe-area-inset-bottom, 0px)) max(14px, env(safe-area-inset-left, 0px)); }
+#sheet.open #detail { display: block; }
+#srcrow { display: flex; justify-content: space-between; align-items: center; gap: 8px; color: var(--muted); font-size: 13px; min-height: 24px; }
+.link { background: none; border: 0; color: var(--accent); font: inherit; padding: 4px 0; text-decoration: underline; }
+.big { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 6px 0 8px; }
+.cell { border: 1px solid var(--line); border-radius: 12px; padding: 8px 12px 6px; min-width: 0; }
+.cell .k { display: block; color: var(--muted); font-size: 13px; }
+.cell .k i { font-style: normal; margin-inline-start: 4px; }
+.cell b { display: block; font-size: 44px; line-height: 1.05; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.cell.hit { border-color: var(--hit-edge); background: color-mix(in srgb, var(--hit) 22%, transparent); }
+#vVillage { font-weight: 650; font-size: 17px; }
+#vInfo { color: var(--muted); font-size: 13.5px; margin-top: 2px; font-variant-numeric: tabular-nums; }
+#vNote { margin-top: 8px; padding: 8px 10px; border-radius: 10px; background: var(--warn-bg); color: var(--warn-ink); font-size: 14px; }
+#vNote[hidden] { display: none; }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.actions button, .btn { border: 1px solid var(--line); background: var(--sheet); color: var(--ink); border-radius: 10px; padding: 10px 14px; font: inherit; font-weight: 600; min-height: 44px; }
+.actions button.primary, .btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.actions button.on { background: var(--hit); color: #231700; border-color: var(--hit-edge); }
+details { margin-top: 12px; border-top: 1px solid var(--line); padding-top: 8px; }
+summary { cursor: pointer; font-weight: 600; min-height: 32px; display: flex; align-items: center; }
+#points { list-style: none; margin: 6px 0; padding: 0; font-size: 14px; font-variant-numeric: tabular-nums; }
+#points li { display: flex; justify-content: space-between; gap: 8px; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--line); }
+#points li span { min-width: 0; }
+#points small { color: var(--muted); display: block; }
+#points button { border: 0; background: none; color: var(--bad); font-size: 20px; padding: 4px 10px; }
+.bar { height: 8px; background: var(--line); border-radius: 4px; overflow: hidden; margin: 6px 0 4px; }
+.bar i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .2s; }
+#vlist { list-style: none; margin: 8px 0; padding: 0; }
+#vlist li { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--line); }
+#vlist li span { min-width: 0; font-size: 14px; }
+#vlist li small { display: block; color: var(--muted); font-size: 12.5px; }
+#vlist li .btn { padding: 8px 12px; min-height: 40px; font-size: 14px; white-space: nowrap; }
+#dlprog { margin: 8px 0; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; }
+#dlprog[hidden] { display: none; }
+#about { color: var(--muted); font-size: 12.5px; margin-top: 10px; }
+button:focus-visible, summary:focus-visible, input:focus-visible, select:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+@media (min-width: 760px) {
+  #mapwrap { --barh: 0px; }
+  #sheet { top: 0; left: auto; width: 380px; max-height: none; border-radius: 0; border-top: 0; border-left: 1px solid var(--line); box-shadow: none; }
+  #bar { display: none; }
+  #detail { display: block; border-top: 0; }
+  #fab { right: 392px; }
+  #layers { right: 448px; }
+}
+</style>
+</head>
+<body>
+<div id="app">
+  <header id="top">
+    <div id="searchrow">
+      <form id="sform" role="search" autocomplete="off">
+        <input id="q" type="text" enterkeyhint="search" placeholder="labar 21/3  or  lat, lon" aria-label="Search by parcel or coordinates" autocapitalize="off" autocorrect="off" spellcheck="false">
+        <button type="button" id="qclear" aria-label="Clear search" hidden>×</button>
+        <button type="submit" id="qgo" aria-label="Search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l5 5"/></svg></button>
+      </form>
+      <div id="chips"><span class="chip" id="chipGps">GPS off</span><span class="chip bad" id="chipNet" hidden>Offline</span><span class="chip" id="chipData" hidden>Data built in</span></div>
+    </div>
+    <div id="qmsg" hidden></div>
+    <ul id="qres" hidden></ul>
+  </header>
+
+  <div id="mapwrap">
+    <canvas id="map" aria-label="Cadastral map"></canvas>
+    <div id="fab">
+      <button id="btnLayers" aria-label="Map layers and alignment" aria-expanded="false"><svg viewBox="0 0 24 24"><path d="M12 3l9 5-9 5-9-5z"/><path d="M3 12.5l9 5 9-5"/><path d="M3 16.5l9 5 9-5"/></svg></button>
+      <button id="btnLocate" aria-label="Find my position"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/></svg></button>
+      <button id="btnFollow" aria-label="Keep map centred on me" aria-pressed="false"><svg viewBox="0 0 24 24"><path d="M12 3l7 17-7-4-7 4z"/></svg></button>
+      <button id="btnIn" aria-label="Zoom in"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
+      <button id="btnOut" aria-label="Zoom out"><svg viewBox="0 0 24 24"><path d="M5 12h14"/></svg></button>
+    </div>
+    <div id="layers" hidden role="dialog" aria-label="Map layers">
+      <div class="ptitle"><span>Map layers</span><button class="x" id="btnLayersX" aria-label="Close">×</button></div>
+      <label class="opt"><input type="radio" name="bm" value="sat"> Satellite</label>
+      <label class="opt"><input type="radio" name="bm" value="street"> Street map</label>
+      <label class="opt"><input type="radio" name="bm" value="none"> Parcels only</label>
+      <label class="row"><span>Parcel lines</span><input id="rngOp" type="range" min="15" max="100" value="100" aria-label="Parcel line opacity"></label>
+      <label class="opt"><input type="checkbox" id="chkSharp"> Sharper imagery (zoom 19)</label>
+      <p class="small" id="sharpNote">Zoom 19 is sharper but larger to download, and may be missing in some places.</p>
+      <div class="sub">Align parcels with the picture <span id="alignV" class="small"></span></div>
+      <div id="pad">
+        <span></span><button data-d="0,1" aria-label="Move parcel lines north">↑</button><span></span>
+        <button data-d="-1,0" aria-label="Move parcel lines west">←</button><span></span><button data-d="1,0" aria-label="Move parcel lines east">→</button>
+        <span></span><button data-d="0,-1" aria-label="Move parcel lines south">↓</button><span></span>
+      </div>
+      <div class="row"><select id="selStep" aria-label="Step size"><option value="1">1 m step</option><option value="5">5 m step</option><option value="20">20 m step</option></select><button class="btn" id="btnAlignReset">Reset</button></div>
+      <p class="small">Arrows slide the parcel lines over the picture for the village in the middle of the screen. Your GPS dot and results follow the corrected lines.</p>
+    </div>
+    <div id="attr"></div>
+    <div id="toast" hidden></div>
+
+  <section id="sheet" aria-live="polite">
+    <div id="bar" role="button" tabindex="0" aria-expanded="false" aria-label="Show details">
+      <div class="grip"></div>
+      <div id="barrow">
+        <div class="bcell"><span class="bk">Murabba</span><b id="bM">–</b></div>
+        <div class="bcell"><span class="bk">Killa</span><b id="bK">–</b></div>
+        <div id="btext"><span id="bVillage">Tap the map to check a point</span><small id="bInfo"></small></div>
+        <button id="bSave" class="btn primary" type="button">Save</button>
+        <span class="chev" aria-hidden="true">▲</span>
+      </div>
+    </div>
+    <div id="detail">
+    <div id="srcrow"><span id="srcLabel">Tap the map to check any point</span><button class="link" id="btnBack" hidden>Back to GPS</button></div>
+    <div class="big">
+      <div class="cell" id="cM"><span class="k">Murabba <i dir="rtl" lang="ur">مربع</i></span><b id="vM">–</b></div>
+      <div class="cell" id="cK"><span class="k">Killa <i dir="rtl" lang="ur">کلہ</i></span><b id="vK">–</b></div>
+    </div>
+    <div id="vVillage"></div>
+    <div id="vInfo"></div>
+    <div id="vNote" hidden></div>
+    <div class="actions">
+      <button id="btnSave" class="primary">Save point</button>
+      <button id="btnFix">Fix position</button>
+    </div>
+    <details id="offline">
+      <summary>Offline maps</summary>
+      <div class="bar"><i id="storBar"></i></div>
+      <div id="storTxt" class="small"></div>
+      <ul id="vlist"></ul>
+      <div id="dlprog" hidden>
+        <div class="bar"><i id="dlBar"></i></div>
+        <div id="dlTxt" class="small"></div>
+        <button class="link" id="btnDlCancel">Stop</button>
+      </div>
+      <label class="opt"><input type="checkbox" id="chkStreet"> Also save the street map</label>
+      <div class="actions">
+        <button id="btnClrAuto">Clear viewed-area cache</button>
+        <button id="btnClrAll">Delete all offline maps</button>
+      </div>
+      <p class="small">Keep the app open on Wi-Fi or good data while a village downloads. Maps you simply look at are also kept (up to 200 MB, oldest removed first). Everything stays under 1000 MB.</p>
+    </details>
+    <details id="saved">
+      <summary>Saved points (<span id="nSaved">0</span>)</summary>
+      <ul id="points"></ul>
+      <div class="actions">
+        <button id="btnCopy">Copy CSV</button>
+        <button id="btnDl">Download CSV</button>
+        <button id="btnClear">Clear all</button>
+      </div>
+    </details>
+    <p id="about">Parcel lines come from the PULSE cadastral layer (Mussavi maps), saved <span id="built"></span>. Indicative only, not a legal boundary. Phone GPS is usually off by 3 to 10 m: near a killa edge, check on the ground.</p>
+    </div>
+  </section>
+  </div>
+</div>
+
+<script src="data.js"></script>
+<script>
+/* Killa Locator core: geometry and lookup. No DOM access, so it runs in Node for tests. */
+(function (root) {
+  'use strict';
+
+  // Local metric frame centred on the data (metres east / north of origin).
+  var LON0 = 71.39, LAT0 = 30.06;
+  var KX = 111320 * Math.cos(LAT0 * Math.PI / 180), KY = 110574;
+
+  function toXY(lon, lat) { return [(lon - LON0) * KX, (lat - LAT0) * KY]; }
+  function toLL(x, y) { return [x / KX + LON0, y / KY + LAT0]; }
+
+  // data.p rows: [village, murabba, killa, subKilla, rings, labelOverride?]
+  // rings: array of flat int arrays, first point absolute and the rest deltas, in 1e-6 degrees from data.o
+  function decode(D) {
+    var O = D.o;
+    var villages = D.v.map(function (v, i) {
+      return { i: i, name: v[0], id: v[1], tehsil: v[2], minx: 1e12, miny: 1e12, maxx: -1e12, maxy: -1e12 };
+    });
+    var murabbas = {};
+    var polys = D.p.map(function (row, idx) {
+      var rings = row[4].map(function (flat) {
+        var n = flat.length / 2, a = new Float64Array(n * 2), x = 0, y = 0;
+        for (var j = 0; j < n; j++) {
+          x += flat[2 * j]; y += flat[2 * j + 1];
+          a[2 * j] = (O[0] + x * 1e-6 - LON0) * KX;
+          a[2 * j + 1] = (O[1] + y * 1e-6 - LAT0) * KY;
+        }
+        return a;
+      });
+      var r0 = rings[0], n0 = r0.length / 2;
+      var minx = 1e12, miny = 1e12, maxx = -1e12, maxy = -1e12, A = 0, cx = 0, cy = 0;
+      for (var k = 0; k < n0; k++) {
+        var px = r0[2 * k], py = r0[2 * k + 1];
+        if (px < minx) minx = px; if (px > maxx) maxx = px;
+        if (py < miny) miny = py; if (py > maxy) maxy = py;
+        var qx = r0[2 * ((k + 1) % n0)], qy = r0[2 * ((k + 1) % n0) + 1];
+        var cr = px * qy - qx * py;
+        A += cr; cx += (px + qx) * cr; cy += (py + qy) * cr;
+      }
+      A /= 2;
+      if (Math.abs(A) > 1e-6) { cx /= 6 * A; cy /= 6 * A; } else { cx = (minx + maxx) / 2; cy = (miny + maxy) / 2; }
+      var area = Math.abs(A);
+      for (var h = 1; h < rings.length; h++) area -= ringArea(rings[h]);
+      var m = row[1], kk = row[2], sk = row[3];
+      var label = row[5] != null ? row[5] : (m === 0 ? String(kk) : m + '/' + kk + (sk ? '/' + sk : ''));
+      var p = { i: idx, v: row[0], m: m, k: kk, sk: sk, label: label, rings: rings,
+        minx: minx, miny: miny, maxx: maxx, maxy: maxy, cx: cx, cy: cy, area: area };
+      var vv = villages[p.v];
+      if (minx < vv.minx) vv.minx = minx; if (miny < vv.miny) vv.miny = miny;
+      if (maxx > vv.maxx) vv.maxx = maxx; if (maxy > vv.maxy) vv.maxy = maxy;
+      if (m > 0) {
+        var key = p.v + '|' + m, mu = murabbas[key];
+        if (!mu) mu = murabbas[key] = { v: p.v, m: m, sx: 0, sy: 0, n: 0, minx: 1e12, miny: 1e12, maxx: -1e12, maxy: -1e12 };
+        mu.sx += cx; mu.sy += cy; mu.n++;
+        if (minx < mu.minx) mu.minx = minx; if (miny < mu.miny) mu.miny = miny;
+        if (maxx > mu.maxx) mu.maxx = maxx; if (maxy > mu.maxy) mu.maxy = maxy;
+      }
+      return p;
+    });
+    var mlist = Object.keys(murabbas).map(function (k) {
+      var q = murabbas[k]; q.cx = q.sx / q.n; q.cy = q.sy / q.n; return q;
+    });
+    var bb = { minx: 1e12, miny: 1e12, maxx: -1e12, maxy: -1e12 };
+    villages.forEach(function (v) {
+      if (v.minx < bb.minx) bb.minx = v.minx; if (v.miny < bb.miny) bb.miny = v.miny;
+      if (v.maxx > bb.maxx) bb.maxx = v.maxx; if (v.maxy > bb.maxy) bb.maxy = v.maxy;
+      v.cx = (v.minx + v.maxx) / 2; v.cy = (v.miny + v.maxy) / 2;
+    });
+    return { villages: villages, polys: polys, murabbas: mlist, bounds: bb, built: D.t };
+  }
+
+  function ringArea(a) {
+    var n = a.length / 2, s = 0;
+    for (var i = 0; i < n; i++) {
+      var j = (i + 1) % n;
+      s += a[2 * i] * a[2 * j + 1] - a[2 * j] * a[2 * i + 1];
+    }
+    return Math.abs(s) / 2;
+  }
+
+  function inRing(a, x, y) {
+    var n = a.length / 2, c = false;
+    for (var i = 0, j = n - 1; i < n; j = i++) {
+      var xi = a[2 * i], yi = a[2 * i + 1], xj = a[2 * j], yj = a[2 * j + 1];
+      if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) c = !c;
+    }
+    return c;
+  }
+
+  function inPoly(p, x, y) {
+    if (x < p.minx || x > p.maxx || y < p.miny || y > p.maxy) return false;
+    var c = false;
+    for (var r = 0; r < p.rings.length; r++) if (inRing(p.rings[r], x, y)) c = !c;
+    return c;
+  }
+
+  function segDist(px, py, ax, ay, bx, by) {
+    var dx = bx - ax, dy = by - ay, l2 = dx * dx + dy * dy, t = 0;
+    if (l2 > 0) { t = ((px - ax) * dx + (py - ay) * dy) / l2; t = t < 0 ? 0 : t > 1 ? 1 : t; }
+    var ex = ax + t * dx - px, ey = ay + t * dy - py;
+    return Math.sqrt(ex * ex + ey * ey);
+  }
+
+  // Distance in metres from a point to the nearest edge of any ring of the polygon.
+  function edgeDist(p, x, y) {
+    var best = 1e12;
+    for (var r = 0; r < p.rings.length; r++) {
+      var a = p.rings[r], n = a.length / 2;
+      for (var i = 0, j = n - 1; i < n; j = i++) {
+        var d = segDist(x, y, a[2 * j], a[2 * j + 1], a[2 * i], a[2 * i + 1]);
+        if (d < best) best = d;
+      }
+    }
+    return best;
+  }
+
+  // Which parcel(s) contain the point, which others lie within r metres, and the nearest parcel if none contain it.
+  function locate(S, x, y, r) {
+    var inside = [], near = [], i, p;
+    for (i = 0; i < S.polys.length; i++) {
+      p = S.polys[i];
+      if (x < p.minx - r || x > p.maxx + r || y < p.miny - r || y > p.maxy + r) continue;
+      var ins = inPoly(p, x, y);
+      if (ins) inside.push({ p: p, d: edgeDist(p, x, y) });
+      else {
+        var d = edgeDist(p, x, y);
+        if (d <= r) near.push({ p: p, d: d });
+      }
+    }
+    inside.sort(function (a, b) { return a.p.area - b.p.area; });
+    near.sort(function (a, b) { return a.d - b.d; });
+    var nearest = null;
+    if (!inside.length) {
+      var R = 400, bestD = 1e12;
+      for (i = 0; i < S.polys.length; i++) {
+        p = S.polys[i];
+        if (x < p.minx - R || x > p.maxx + R || y < p.miny - R || y > p.maxy + R) continue;
+        var dd = edgeDist(p, x, y);
+        if (dd < bestD) { bestD = dd; nearest = { p: p, d: dd }; }
+      }
+    }
+    return { inside: inside, near: near, nearest: nearest };
+  }
+
+  // Compass word for a metre offset (east dx, north dy).
+  function dirWord(dx, dy) {
+    var a = Math.atan2(dx, dy) * 180 / Math.PI; if (a < 0) a += 360;
+    return ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'][Math.round(a / 45) % 8];
+  }
+
+  var api = { LON0: LON0, LAT0: LAT0, KX: KX, KY: KY, toXY: toXY, toLL: toLL, decode: decode,
+    inPoly: inPoly, edgeDist: edgeDist, locate: locate, dirWord: dirWord };
+  if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.KillaCore = api;
+})(typeof window !== 'undefined' ? window : globalThis);
+
+</script>
+<script>
+(function () {
+  'use strict';
+  var C = window.KillaCore, S = C.decode(window.KILLA_DATA);
+  var $ = function (id) { return document.getElementById(id); };
+  var cv = $('map'), ctx = cv.getContext('2d');
+
+  // ---------- state ----------
+  var view = { x: 0, y: 0, z: 0.1 };
+  var gps = null;            // { rx, ry (raw, real world), bx, by (parcel frame), x, y (parcel frame + fix offset), acc, t }
+  var offset = load('killa.offset', { dx: 0, dy: 0 });
+  var target = null;         // point shown in the result panel: { x, y, src: 'gps'|'tap', acc }
+  var pinned = false;        // true while a tapped point is shown instead of GPS
+  var follow = false, calib = false, watchId = null, userMoved = false, lastRes = null;
+  var points = load('killa.points', []);
+  var colors = {}, dpr = 1, W = 0, H = 0, raf = 0;
+  var isDesk = window.matchMedia ? window.matchMedia('(min-width: 760px)') : { matches: false };
+  var sheetOpen = false;
+
+  // basemap state
+  var layer = load('killa.layer', 'sat');
+  var sharp = load('killa.sharp', false);
+  var parcelOp = load('killa.pop', 1);
+  var pshift = load('killa.pshift', {});   // per-village shift (metres) that lays the parcel lines onto the imagery
+  var vdl = load('killa.vdl', {});         // downloaded-village records
+  var step = load('killa.step', 5);
+  var ZERO = { dx: 0, dy: 0 }, curShift = ZERO, av = -1;
+
+  function load(k, d) { try { var s = localStorage.getItem(k); return s ? JSON.parse(s) : d; } catch (e) { return d; } }
+  function save(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
+
+  // ---------- helpers ----------
+  function readColors() {
+    var cs = getComputedStyle(document.documentElement);
+    ['--bg', '--parcel', '--t0', '--t1', '--t2', '--t3', '--ink', '--halo', '--accent', '--hit', '--hit-edge', '--muted'].forEach(function (n) {
+      colors[n] = cs.getPropertyValue(n).trim();
+    });
+  }
+  function fmt(n) { return String(Math.round(n)); }
+  function mb(b) { return b >= 1e8 ? (b / 1048576).toFixed(0) : (b / 1048576).toFixed(1); }
+  function toast(msg) {
+    var t = $('toast'); t.textContent = msg; t.hidden = false;
+    clearTimeout(toast.h); toast.h = setTimeout(function () { t.hidden = true; }, 3500);
+  }
+  function sx(x) { return (x - view.x) * view.z + W / 2; }
+  function sy(y) { return (view.y - y) * view.z + H / 2; }
+  function ago(t) { var s = Math.max(0, Math.round((Date.now() - t) / 1000)); return s < 60 ? s + ' s ago' : Math.round(s / 60) + ' min ago'; }
+  function invalidate() { if (!raf) raf = requestAnimationFrame(function () { raf = 0; draw(); }); }
+
+  // which village the point (parcel frame, roughly) belongs to
+  function villageAt(x, y) {
+    // village boxes overlap, so first ask which parcel actually holds the point
+    var P = S.polys, hit = -1, ha = 1e18, i, p;
+    for (i = 0; i < P.length; i++) {
+      p = P[i];
+      if (x < p.minx || x > p.maxx || y < p.miny || y > p.maxy) continue;
+      if (p.area < ha && C.inPoly(p, x, y)) { ha = p.area; hit = p.v; }
+    }
+    if (hit >= 0) return hit;
+    var best = -1, bd = 1e12;
+    S.villages.forEach(function (v, i) {
+      var dx = Math.max(v.minx - x, 0, x - v.maxx), dy = Math.max(v.miny - y, 0, y - v.maxy);
+      var d = Math.hypot(dx, dy) + 0.001 * Math.hypot(x - v.cx, y - v.cy);
+      if (d < bd) { bd = d; best = i; }
+    });
+    return best;
+  }
+  function shiftOf(vi) { return (vi >= 0 && pshift[vi]) || ZERO; }
+
+  // ======================================================================
+  // Basemap tiles: memory cache -> IndexedDB (offline) -> network
+  // ======================================================================
+  var CAP = 1000 * 1048576, AUTO_CAP = 200 * 1048576;
+  var SRC = {
+    sat: { c: 's', u: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', avg: 26000,
+      attr: 'Imagery © Esri, Maxar, Earthstar Geographics' },
+    street: { c: 't', u: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', avg: 12000,
+      attr: 'Map © Esri, HERE, Garmin, OpenStreetMap contributors' }
+  };
+  if (!SRC[layer]) layer = 'none';
+
+  function lon2x(lon, z) { return (lon + 180) / 360 * Math.pow(2, z); }
+  function lat2y(lat, z) { var r = lat * Math.PI / 180; return (1 - Math.log(Math.tan(r) + 1 / Math.cos(r)) / Math.PI) / 2 * Math.pow(2, z); }
+  function x2lon(x, z) { return x / Math.pow(2, z) * 360 - 180; }
+  function y2lat(y, z) { var n = Math.PI - 2 * Math.PI * y / Math.pow(2, z); return 180 / Math.PI * Math.atan(0.5 * (Math.exp(n) - Math.exp(-n))); }
+  function tkey(l, z, x, y) { return SRC[l].c + '/' + z + '/' + x + '/' + y; }
+  function tileUrl(l, z, x, y) { return SRC[l].u.replace('{z}', z).replace('{y}', y).replace('{x}', x); }
+
+  // ----- IndexedDB: store 't' holds the picture, store 'm' holds size/pinned/time so totals are cheap -----
+  var idb = null, stat = { auto: 0, pin: 0, nAuto: 0, nPin: 0 };
+  function idbOpen() {
+    return new Promise(function (res) {
+      try {
+        if (!window.indexedDB) return res(null);
+        var r = indexedDB.open('killa-tiles', 1);
+        r.onupgradeneeded = function () {
+          var d = r.result; d.createObjectStore('t', { keyPath: 'k' });
+          d.createObjectStore('m', { keyPath: 'k' }).createIndex('t', 't');
+        };
+        r.onsuccess = function () { res(r.result); };
+        r.onerror = r.onblocked = function () { res(null); };
+      } catch (e) { res(null); }
+    });
+  }
+  function rq(r) { return new Promise(function (res) { r.onsuccess = function () { res(r.result); }; r.onerror = function () { res(null); }; }); }
+  function tileGet(k) { try { return idb ? rq(idb.transaction('t').objectStore('t').get(k)) : Promise.resolve(null); } catch (e) { return Promise.resolve(null); } }
+  function metaGet(k) { try { return idb ? rq(idb.transaction('m').objectStore('m').get(k)) : Promise.resolve(null); } catch (e) { return Promise.resolve(null); } }
+  function account(m, sgn) {
+    if (m.pin) { stat.pin += sgn * m.size; stat.nPin += sgn; } else { stat.auto += sgn * m.size; stat.nAuto += sgn; }
+  }
+  function tilePut(k, blob, pin) {
+    if (!idb) return Promise.resolve(false);
+    return metaGet(k).then(function (old) {
+      return new Promise(function (res) {
+        try {
+          var p = (pin || (old && old.pin)) ? 1 : 0, t = idb.transaction(['t', 'm'], 'readwrite');
+          t.objectStore('t').put({ k: k, blob: blob });
+          t.objectStore('m').put({ k: k, size: blob.size, pin: p, t: Date.now() });
+          t.oncomplete = function () { if (old) account(old, -1); account({ size: blob.size, pin: p }, 1); res(true); };
+          t.onerror = t.onabort = function () { res(false); };
+        } catch (e) { res(false); }
+      });
+    });
+  }
+  function metaPin(k, m) {   // mark an already stored tile as part of a downloaded village
+    return new Promise(function (res) {
+      try {
+        var t = idb.transaction('m', 'readwrite');
+        t.objectStore('m').put({ k: k, size: m.size, pin: 1, t: m.t });
+        t.oncomplete = function () { account(m, -1); account({ size: m.size, pin: 1 }, 1); res(); };
+        t.onerror = t.onabort = function () { res(); };
+      } catch (e) { res(); }
+    });
+  }
+  function tileDel(keys) {
+    return new Promise(function (res) {
+      if (!idb || !keys.length) return res();
+      try {
+        var t = idb.transaction(['t', 'm'], 'readwrite'), ms = t.objectStore('m'), ts = t.objectStore('t');
+        keys.forEach(function (k) {
+          ms.get(k).onsuccess = function (e) { var m = e.target.result; if (m) account(m, -1); ms.delete(k); ts.delete(k); };
+        });
+        t.oncomplete = function () { res(); }; t.onerror = t.onabort = function () { res(); };
+      } catch (e) { res(); }
+    });
+  }
+  function statsLoad() {
+    return new Promise(function (res) {
+      stat = { auto: 0, pin: 0, nAuto: 0, nPin: 0 };
+      try {
+        var c = idb.transaction('m').objectStore('m').openCursor();
+        c.onsuccess = function () { var cur = c.result; if (cur) { account(cur.value, 1); cur.continue(); } else res(); };
+        c.onerror = function () { res(); };
+      } catch (e) { res(); }
+    });
+  }
+  var evicting = false;
+  function evictSoon() {
+    if (!idb || evicting || stat.auto <= AUTO_CAP) return;
+    evicting = true;
+    var goal = AUTO_CAP * 0.8, freed = 0, keys = [];
+    try {
+      var c = idb.transaction('m').objectStore('m').index('t').openCursor();
+      c.onsuccess = function () {
+        var cur = c.result;
+        if (cur && stat.auto - freed > goal) { if (!cur.value.pin) { keys.push(cur.value.k); freed += cur.value.size; } cur.continue(); }
+        else tileDel(keys).then(function () { evicting = false; renderStorage(); });
+      };
+      c.onerror = function () { evicting = false; };
+    } catch (e) { evicting = false; }
+  }
+
+  // ----- fetching and decoding -----
+  function fetchTile(url) {
+    var ctl = window.AbortController ? new AbortController() : null, to = setTimeout(function () { if (ctl) ctl.abort(); }, 12000);
+    var opt = { mode: 'cors' }; if (ctl) opt.signal = ctl.signal;
+    return fetch(url, opt).then(function (r) {
+      clearTimeout(to);
+      if (!r.ok) return null;
+      return r.blob().then(function (b) { return b && b.size > 300 && /^image\//.test(b.type) ? b : null; });
+    }).catch(function () { clearTimeout(to); return null; });
+  }
+  function decodeBlob(blob) {
+    if (window.createImageBitmap) return createImageBitmap(blob);
+    return new Promise(function (res, rej) {
+      var u = URL.createObjectURL(blob), im = new Image();
+      im.onload = function () { URL.revokeObjectURL(u); res(im); };
+      im.onerror = function () { URL.revokeObjectURL(u); rej(); };
+      im.src = u;
+    });
+  }
+  function plainImage(url) {   // last resort if the server refuses cross-origin reads: shows the tile but cannot save it
+    return new Promise(function (res) {
+      var im = new Image(); im.onload = function () { res(im); }; im.onerror = function () { res(null); };
+      im.src = url;
+    });
+  }
+
+  var mem = new Map(), pend = {}, queue = [], inflight = 0, wanted = {};
+  function memTrim() {
+    while (mem.size > 420) { var k = mem.keys().next().value, e = mem.get(k); if (e && e.img && e.img.close) { try { e.img.close(); } catch (x) {} } mem.delete(k); }
+  }
+  function getTile(l, z, x, y) {
+    var k = tkey(l, z, x, y), e = mem.get(k);
+    if (e) {
+      if (e.img) { mem.delete(k); mem.set(k, e); return e.img; }
+      if (Date.now() < e.retry) return null;
+      mem.delete(k);
+    }
+    wanted[k] = 1;
+    if (!pend[k]) { pend[k] = 1; queue.push({ k: k, l: l, z: z, x: x, y: y }); pump(); }
+    return null;
+  }
+  function peek(l, z, x, y) { return mem.get(tkey(l, z, x, y)); }
+  function pump() {
+    while (inflight < 6 && queue.length) {
+      var j = queue.pop();
+      if (!wanted[j.k]) { delete pend[j.k]; continue; }
+      inflight++; run(j);
+    }
+  }
+  function run(j) {
+    tileGet(j.k).then(function (rec) {
+      if (rec && rec.blob) return rec.blob;
+      return fetchTile(tileUrl(j.l, j.z, j.x, j.y)).then(function (b) {
+        if (b) tilePut(j.k, b, 0).then(function () { evictSoon(); renderStorage(); });
+        return b;
+      });
+    }).then(function (blob) {
+      if (blob) return decodeBlob(blob).then(function (img) { mem.set(j.k, { img: img }); }, function () { throw 0; });
+      if (navigator.onLine === false) throw 0;
+      return plainImage(tileUrl(j.l, j.z, j.x, j.y)).then(function (im) { if (im) mem.set(j.k, { img: im }); else throw 0; });
+    }).catch(function () {
+      mem.set(j.k, { retry: Date.now() + 15000 });
+    }).then(function () {
+      memTrim(); delete pend[j.k]; inflight--; invalidate(); pump();
+    });
+  }
+
+  function drawBase(x0, y0, x1, y1) {
+    var s = curShift, lat = C.LAT0 * Math.PI / 180;
+    var zf = Math.log(view.z * dpr * 156543.034 * Math.cos(lat)) / Math.LN2;
+    var zmax = sharp ? 19 : 18, z = Math.max(8, Math.min(zmax, Math.round(zf + 0.25)));
+    var a = C.toLL(x0 + s.dx, y0 + s.dy), b = C.toLL(x1 + s.dx, y1 + s.dy), tx0, tx1, ty0, ty1;
+    for (;;) {
+      tx0 = Math.floor(lon2x(a[0], z)); tx1 = Math.floor(lon2x(b[0], z));
+      ty0 = Math.floor(lat2y(b[1], z)); ty1 = Math.floor(lat2y(a[1], z));
+      if ((tx1 - tx0 + 1) * (ty1 - ty0 + 1) <= 100 || z <= 8) break;
+      z--;
+    }
+    for (var ty = ty0; ty <= ty1; ty++) {
+      for (var tx = tx0; tx <= tx1; tx++) {
+        var xl = (x2lon(tx, z) - C.LON0) * C.KX - s.dx, xr = (x2lon(tx + 1, z) - C.LON0) * C.KX - s.dx;
+        var yt = (y2lat(ty, z) - C.LAT0) * C.KY - s.dy, yb = (y2lat(ty + 1, z) - C.LAT0) * C.KY - s.dy;
+        var L = Math.floor(sx(xl)), R = Math.ceil(sx(xr)), T = Math.floor(sy(yt)), B = Math.ceil(sy(yb));
+        var img = getTile(layer, z, tx, ty);
+        if (img) { ctx.drawImage(img, L, T, R - L, B - T); continue; }
+        // not ready or not available: borrow the picture from a coarser tile, and walk up if that tile is missing too
+        var e0 = peek(layer, z, tx, ty), failed = !!(e0 && e0.retry);
+        for (var k = 1; k <= 4 && z - k >= 8; k++) {
+          var pz = z - k, px = tx >> k, py = ty >> k, e = peek(layer, pz, px, py);
+          if (e && e.img) {
+            var sw = e.img.width / (1 << k), sh = e.img.height / (1 << k);
+            ctx.drawImage(e.img, (tx - (px << k)) * sw, (ty - (py << k)) * sh, sw, sh, L, T, R - L, B - T);
+            break;
+          }
+          if (failed || k === 1) { getTile(layer, pz, px, py); }
+          failed = !!(e && e.retry);
+          if (!failed && !(e && e.img)) break;   // still loading: wait for it
+        }
+      }
+    }
+  }
+
+  // ======================================================================
+  // Drawing
+  // ======================================================================
+  function resize() {
+    dpr = Math.min(window.devicePixelRatio || 1, 3);
+    W = cv.clientWidth; H = cv.clientHeight;
+    cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
+    invalidate();
+  }
+
+  function fitAll() {
+    var b = S.bounds, bw = b.maxx - b.minx, bh = b.maxy - b.miny;
+    view.x = (b.minx + b.maxx) / 2; view.y = (b.miny + b.maxy) / 2;
+    view.z = Math.min(W / bw, H / bh) * 0.92 || 0.05;
+  }
+
+  function addPoly(path, p) {
+    for (var r = 0; r < p.rings.length; r++) {
+      var a = p.rings[r], n = a.length / 2;
+      path.moveTo(sx(a[0]), sy(a[1]));
+      for (var i = 1; i < n; i++) path.lineTo(sx(a[2 * i]), sy(a[2 * i + 1]));
+      path.closePath();
+    }
+  }
+
+  function halo(text, x, y, size, weight) {
+    ctx.font = weight + ' ' + size + 'px system-ui, sans-serif';
+    ctx.lineWidth = Math.max(3, size / 4); ctx.strokeStyle = colors['--halo']; ctx.lineJoin = 'round';
+    ctx.strokeText(text, x, y); ctx.fillStyle = colors['--ink']; ctx.fillText(text, x, y);
+  }
+
+  function draw() {
+    if (!W) return;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.fillStyle = colors['--bg']; ctx.fillRect(0, 0, W, H);
+    var z = view.z, hw = W / 2 / z, hh = H / 2 / z;
+    var x0 = view.x - hw, x1 = view.x + hw, y0 = view.y - hh, y1 = view.y + hh;
+
+    var nav = villageAt(view.x, view.y);
+    if (nav !== av) { av = nav; updateAlignUi(); }
+    curShift = shiftOf(av);
+    wanted = {};
+    var onImg = layer !== 'none';
+    if (onImg) drawBase(x0, y0, x1, y1);
+
+    var fills = [new Path2D(), new Path2D(), new Path2D(), new Path2D()], edge = new Path2D(), vis = [];
+    var polys = S.polys, i, p;
+    for (i = 0; i < polys.length; i++) {
+      p = polys[i];
+      if (p.maxx < x0 || p.minx > x1 || p.maxy < y0 || p.miny > y1) continue;
+      vis.push(p);
+      addPoly(fills[(p.m + 4) & 3], p);
+      addPoly(edge, p);
+    }
+    ctx.globalAlpha = parcelOp * (onImg ? 0.3 : 1);
+    for (i = 0; i < 4; i++) { ctx.fillStyle = colors['--t' + i]; ctx.fill(fills[i], 'evenodd'); }
+    ctx.globalAlpha = parcelOp;
+    var lw = z < 0.15 ? 0.6 : 1.3;
+    if (onImg) {
+      ctx.lineWidth = lw + (z < 0.15 ? 0.8 : 2); ctx.strokeStyle = 'rgba(0,0,0,.5)'; ctx.stroke(edge);
+      ctx.lineWidth = lw; ctx.strokeStyle = layer === 'sat' ? '#ffe94d' : '#c2185b'; ctx.stroke(edge);
+    } else {
+      ctx.lineWidth = z < 0.15 ? 0.6 : 1; ctx.strokeStyle = colors['--parcel']; ctx.stroke(edge);
+    }
+    ctx.globalAlpha = 1;
+
+    // parcels under the point being checked
+    if (lastRes && target) {
+      var hl = lastRes.inside.map(function (h) { return h.p; });
+      var hp = new Path2D(); hl.forEach(function (q) { addPoly(hp, q); });
+      ctx.fillStyle = colors['--hit']; ctx.globalAlpha = onImg ? 0.35 : 0.5; ctx.fill(hp, 'evenodd'); ctx.globalAlpha = 1;
+      ctx.lineWidth = 3; ctx.strokeStyle = colors['--hit-edge']; ctx.stroke(hp);
+    }
+
+    // labels
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    var mk = [];
+    if (gps) mk.push([sx(gps.x), sy(gps.y)]);
+    if (pinned && target) mk.push([sx(target.x), sy(target.y)]);
+    if (z >= 0.4) {
+      for (i = 0; i < vis.length; i++) {
+        p = vis[i];
+        var pw = (p.maxx - p.minx) * z, ph = (p.maxy - p.miny) * z;
+        if (Math.min(pw, ph) < 24) continue;
+        var cxp = sx(p.cx), cyp = sy(p.cy);
+        if (cxp < -40 || cxp > W + 40 || cyp < -20 || cyp > H + 20) continue;
+        if (mk.some(function (m) { return Math.hypot(m[0] - cxp, m[1] - cyp) < 24; })) continue;
+        var size = Math.max(11, Math.min(18, Math.min(pw, ph) * 0.26));
+        halo(p.label, cxp, cyp, size, 650);
+      }
+    } else if (z >= 0.11) {
+      var ms = S.murabbas;
+      for (i = 0; i < ms.length; i++) {
+        var q = ms[i];
+        if (q.cx < x0 || q.cx > x1 || q.cy < y0 || q.cy > y1) continue;
+        halo(String(q.m), sx(q.cx), sy(q.cy), Math.max(13, Math.min(30, z * 90)), 700);
+      }
+    } else {
+      for (i = 0; i < S.villages.length; i++) {
+        var v = S.villages[i];
+        halo(v.name, sx(v.cx), sy(v.cy), 14, 700);
+      }
+    }
+
+    // GPS marker with accuracy circle
+    if (gps) {
+      var gx = sx(gps.x), gy = sy(gps.y), ar = gps.acc * z;
+      if (ar > 6) {
+        ctx.beginPath(); ctx.arc(gx, gy, ar, 0, 6.2832);
+        ctx.fillStyle = colors['--accent']; ctx.globalAlpha = 0.14; ctx.fill(); ctx.globalAlpha = 0.6; ctx.lineWidth = 1.5; ctx.strokeStyle = colors['--accent']; ctx.stroke(); ctx.globalAlpha = 1;
+      }
+      ctx.beginPath(); ctx.arc(gx, gy, 9, 0, 6.2832); ctx.fillStyle = '#fff'; ctx.fill();
+      ctx.beginPath(); ctx.arc(gx, gy, 6.5, 0, 6.2832); ctx.fillStyle = colors['--accent']; ctx.fill();
+    }
+    // tapped point marker
+    if (pinned && target) {
+      var tx = sx(target.x), ty = sy(target.y);
+      ctx.lineWidth = 3; ctx.strokeStyle = colors['--hit-edge']; ctx.fillStyle = '#fff';
+      ctx.beginPath(); ctx.arc(tx, ty, 9, 0, 6.2832); ctx.fill(); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(tx - 15, ty); ctx.lineTo(tx - 9, ty); ctx.moveTo(tx + 9, ty); ctx.lineTo(tx + 15, ty);
+      ctx.moveTo(tx, ty - 15); ctx.lineTo(tx, ty - 9); ctx.moveTo(tx, ty + 9); ctx.lineTo(tx, ty + 15); ctx.stroke();
+    }
+    // scale bar
+    var nice = [5, 10, 20, 50, 100, 200, 500, 1000, 2000], len = 5;
+    for (i = 0; i < nice.length; i++) { len = nice[i]; if (len * z >= 60) break; }
+    var bx = 14, by = H - 26 - (isDesk.matches ? 0 : 76);
+    ctx.lineWidth = 3; ctx.strokeStyle = colors['--halo']; ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(bx + len * z, by); ctx.stroke();
+    ctx.lineWidth = 1.5; ctx.strokeStyle = colors['--ink']; ctx.stroke();
+    ctx.textAlign = 'left'; halo(len >= 1000 ? len / 1000 + ' km' : len + ' m', bx, by - 12, 12, 600);
+  }
+
+  // ---------- result panel ----------
+  function refreshPanel() {
+    if (!target) {
+      lastRes = null;
+      $('vM').textContent = '–'; $('vK').textContent = '–'; $('vVillage').textContent = '';
+      $('vInfo').textContent = gps ? '' : 'Press the target button to start GPS.';
+      $('vNote').hidden = true; $('cM').classList.remove('hit'); $('cK').classList.remove('hit');
+      $('srcLabel').textContent = 'Tap the map to check any point'; $('btnBack').hidden = true;
+      setBar('–', '–', 'Tap the map to check a point', '', false);
+      return;
+    }
+    var acc = target.src === 'gps' ? target.acc : 0;
+    var r = Math.min(Math.max(acc, 5), 40);
+    var res = C.locate(S, target.x, target.y, r);
+    lastRes = res;
+    var info = [], note = [];
+    $('srcLabel').textContent = target.src === 'gps' ? 'Your position' : 'Tapped point';
+    $('btnBack').hidden = !(pinned && gps);
+
+    var hit = res.inside[0];
+    if (hit) {
+      var p = hit.p, v = S.villages[p.v];
+      $('vM').textContent = p.m > 0 ? String(p.m) : '–';
+      $('vK').textContent = p.m > 0 ? p.k + (p.sk ? ' / ' + p.sk : '') : p.label;
+      $('cM').classList.add('hit'); $('cK').classList.add('hit');
+      $('vVillage').textContent = v.name + ' · ' + v.tehsil;
+      info.push('Label ' + p.label);
+      info.push(fmt(hit.d) + ' m from this killa’s edge');
+      if (p.m === 0) note.push('This parcel is outside the numbered murabba grid, so only its label is shown.');
+      if (res.inside.length > 1) note.push('Overlapping parcels here: ' + res.inside.slice(1).map(function (h) { return h.p.label; }).join(', ') + '.');
+      var close = res.near.filter(function (h) { return h.d <= r; }).slice(0, 4);
+      if (close.length || hit.d <= r) {
+        note.push('Close to a boundary' + (acc ? ' (within GPS error)' : '') + (close.length ? ': also ' + close.map(function (h) {
+          return h.p.label + ' (' + fmt(h.d) + ' m ' + C.dirWord(h.p.cx - target.x, h.p.cy - target.y) + ')';
+        }).join(', ') : '') + '. Check on the ground.');
+      }
+    } else {
+      $('vM').textContent = '–'; $('vK').textContent = '–';
+      $('cM').classList.remove('hit'); $('cK').classList.remove('hit');
+      if (res.nearest) {
+        var np = res.nearest.p;
+        $('vVillage').textContent = 'Not inside a mapped parcel';
+        note.push('Nearest parcel: ' + np.label + ' in ' + S.villages[np.v].name + ', ' + fmt(res.nearest.d) + ' m ' + C.dirWord(np.cx - target.x, np.cy - target.y) + ' of you.');
+      } else {
+        $('vVillage').textContent = 'Outside the saved villages';
+        note.push('This point is more than 400 m from any saved parcel.');
+      }
+    }
+    if (target.src === 'gps') {
+      info.unshift('GPS ±' + fmt(target.acc) + ' m, ' + ago(gps.t));
+      if (target.acc > 40) note.push('GPS is weak. Wait a moment or move to open sky before trusting this.');
+    }
+    if (offset.dx || offset.dy) info.push('offset ' + fmt(Math.abs(offset.dx)) + ' m ' + (offset.dx >= 0 ? 'E' : 'W') + ', ' + fmt(Math.abs(offset.dy)) + ' m ' + (offset.dy >= 0 ? 'N' : 'S'));
+    $('vInfo').textContent = info.join(' · ');
+    var nb = $('vNote'); nb.hidden = !note.length; nb.textContent = note.join(' ');
+    setBar($('vM').textContent, $('vK').textContent, $('vVillage').textContent, info.join(' · '), !!hit);
+  }
+  function setBar(m, k, vill, info, hit) {
+    $('bM').textContent = m; $('bK').textContent = k; $('bVillage').textContent = vill; $('bInfo').textContent = info || '';
+    $('bar').classList.toggle('hit', !!hit);
+  }
+  function setSheet(open) {
+    sheetOpen = !!open; $('sheet').classList.toggle('open', sheetOpen);
+    $('bar').setAttribute('aria-expanded', sheetOpen ? 'true' : 'false');
+    $('bar').setAttribute('aria-label', sheetOpen ? 'Hide details' : 'Show details');
+  }
+  (function () {
+    var bar = $('bar'), y0 = null;
+    bar.addEventListener('pointerdown', function (e) { if (e.target.closest('#bSave')) return; y0 = e.clientY; try { bar.setPointerCapture(e.pointerId); } catch (x) {} });
+    bar.addEventListener('pointerup', function (e) {
+      if (y0 === null) return; var dy = e.clientY - y0; y0 = null;
+      if (dy < -18) setSheet(true); else if (dy > 18) setSheet(false); else setSheet(!sheetOpen);
+    });
+    bar.addEventListener('pointercancel', function () { y0 = null; });
+    bar.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSheet(!sheetOpen); } });
+  })();
+
+  // ---------- GPS ----------
+  function setChip(text, cls) { var c = $('chipGps'); c.textContent = text; c.className = 'chip' + (cls ? ' ' + cls : ''); }
+
+  // put the GPS dot in the parcel frame: real position, minus the village's parcel-to-picture shift, plus the Fix-position offset
+  function placeGps() {
+    if (!gps) return;
+    var s = shiftOf(villageAt(gps.rx, gps.ry));
+    gps.bx = gps.rx - s.dx; gps.by = gps.ry - s.dy;
+    gps.x = gps.bx + offset.dx; gps.y = gps.by + offset.dy;
+  }
+  function retarget() { if (gps && !pinned) target = { x: gps.x, y: gps.y, src: 'gps', acc: gps.acc }; }
+
+  function onFix(pos) {
+    var ll = C.toXY(pos.coords.longitude, pos.coords.latitude);
+    gps = { rx: ll[0], ry: ll[1], acc: pos.coords.accuracy || 50, t: Date.now() };
+    placeGps();
+    setChip('GPS ±' + fmt(gps.acc) + ' m', gps.acc <= 15 ? 'ok' : gps.acc > 40 ? 'bad' : '');
+    retarget();
+    var b = S.bounds;
+    if (follow || (!userMoved && gps.x > b.minx - 500 && gps.x < b.maxx + 500 && gps.y > b.miny - 500 && gps.y < b.maxy + 500)) {
+      view.x = gps.x; view.y = gps.y; if (view.z < 1.2) view.z = 1.5;
+    }
+    refreshPanel(); invalidate();
+  }
+  function onErr(e) {
+    if (e.code === 1) { setChip('GPS blocked', 'bad'); toast('Location is blocked. Allow Location for this app in the phone settings.'); stopGps(); }
+    else if (e.code === 2) setChip('No GPS signal', 'bad');
+    else setChip('Searching…');
+  }
+
+  // Inside the APK the phone's own location permission is asked through the Capacitor Geolocation plugin.
+  var nativeBusy = false;
+  function nativeGeo() {
+    var c = window.Capacitor;
+    if (!c || !(c.isNativePlatform ? c.isNativePlatform() : false)) return null;
+    try { return (c.Plugins && c.Plugins.Geolocation) || (c.registerPlugin && c.registerPlugin('Geolocation')) || null; } catch (e) { return null; }
+  }
+  function permOk(st) { return !!st && (st.location === 'granted' || st.coarseLocation === 'granted'); }
+  function blockedMsg() {
+    setChip('GPS blocked', 'bad');
+    toast('Location permission is off. Open Phone Settings > Apps > Killa Locator > Permissions > Location and choose Allow.');
+  }
+  function nativeErr(e) {
+    var msg = String((e && (e.message || e.errorMessage)) || e || '');
+    if (/enable|disabled|services/i.test(msg)) { setChip('GPS off', 'bad'); toast('Turn on Location (GPS) in the phone quick settings, then tap the target button.'); }
+    else if (/denied|permission/i.test(msg)) blockedMsg();
+    else setChip('Searching…');
+  }
+  function startNative(g) {
+    if (nativeBusy) return;
+    nativeBusy = true; setChip('Searching…');
+    g.checkPermissions().then(function (st) {
+      return permOk(st) ? st : g.requestPermissions({ permissions: ['location'] });
+    }).then(function (st) {
+      if (!permOk(st)) { nativeBusy = false; blockedMsg(); return; }
+      return g.watchPosition({ enableHighAccuracy: true, timeout: 25000, maximumAge: 1500 }, function (pos, err) {
+        if (err) nativeErr(err); else if (pos) onFix(pos);
+      }).then(function (id) { watchId = id; nativeBusy = false; });
+    }).catch(function (e) { nativeBusy = false; nativeErr(e); });
+  }
+  function startGps() {
+    var g = nativeGeo();
+    if (g) { if (watchId === null) startNative(g); return; }
+    if (!navigator.geolocation) { toast('This device has no GPS support.'); return; }
+    if (watchId !== null) return;
+    setChip('Searching…');
+    watchId = navigator.geolocation.watchPosition(onFix, onErr, { enableHighAccuracy: true, maximumAge: 1500, timeout: 25000 });
+    try { if (navigator.wakeLock) navigator.wakeLock.request('screen').catch(function () {}); } catch (e) {}
+  }
+  function stopGps() {
+    if (watchId === null) return;
+    var g = nativeGeo();
+    if (g) { try { g.clearWatch({ id: watchId }); } catch (e) {} } else navigator.geolocation.clearWatch(watchId);
+    watchId = null;
+  }
+  document.addEventListener('visibilitychange', function () {
+    if (!document.hidden && (watchId !== null || dl)) { try { if (navigator.wakeLock) navigator.wakeLock.request('screen').catch(function () {}); } catch (e) {} }
+  });
+
+  // ---------- map interaction ----------
+  var ptrs = {}, tap = null, pinch = null;
+  function pos(e) { var r = cv.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; }
+  function zoomAt(px, py, f) {
+    var nz = Math.max(0.02, Math.min(40, view.z * f)); f = nz / view.z;
+    var wx = view.x + (px - W / 2) / view.z, wy = view.y - (py - H / 2) / view.z;
+    view.z = nz; view.x = wx - (px - W / 2) / nz; view.y = wy + (py - H / 2) / nz;
+    invalidate();
+  }
+  cv.addEventListener('pointerdown', function (e) {
+    cv.setPointerCapture(e.pointerId);
+    ptrs[e.pointerId] = pos(e);
+    var ids = Object.keys(ptrs);
+    if (ids.length === 1) tap = { x: ptrs[e.pointerId].x, y: ptrs[e.pointerId].y, t: Date.now(), moved: false };
+    else { tap = null; var a = ptrs[ids[0]], b = ptrs[ids[1]]; pinch = Math.hypot(a.x - b.x, a.y - b.y); }
+  });
+  cv.addEventListener('pointermove', function (e) {
+    if (!ptrs[e.pointerId]) return;
+    var np = pos(e), old = ptrs[e.pointerId], ids = Object.keys(ptrs);
+    if (ids.length === 1) {
+      view.x -= (np.x - old.x) / view.z; view.y += (np.y - old.y) / view.z;
+      if (tap && Math.hypot(np.x - tap.x, np.y - tap.y) > 8) { tap.moved = true; }
+      if (tap && tap.moved) { userMoved = true; if (follow) setFollow(false); }
+      ptrs[e.pointerId] = np; invalidate();
+    } else if (ids.length === 2) {
+      ptrs[e.pointerId] = np;
+      var a = ptrs[ids[0]], b = ptrs[ids[1]], d = Math.hypot(a.x - b.x, a.y - b.y);
+      if (pinch && d > 0) { zoomAt((a.x + b.x) / 2, (a.y + b.y) / 2, d / pinch); userMoved = true; }
+      pinch = d;
+    }
+  });
+  function up(e) {
+    if (!ptrs[e.pointerId]) return;
+    var wasTap = tap && !tap.moved && Date.now() - tap.t < 600 && Object.keys(ptrs).length === 1;
+    var p = ptrs[e.pointerId];
+    delete ptrs[e.pointerId]; pinch = null;
+    if (wasTap && e.type === 'pointerup') onTap(p.x, p.y);
+    tap = null;
+  }
+  cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up);
+  cv.addEventListener('wheel', function (e) { e.preventDefault(); var p = pos(e); zoomAt(p.x, p.y, Math.exp(-e.deltaY * 0.0015)); userMoved = true; }, { passive: false });
+
+  function onTap(px, py) {
+    var x = view.x + (px - W / 2) / view.z, y = view.y - (py - H / 2) / view.z;
+    if (calib) {
+      calib = false; $('btnFix').classList.remove('on');
+      offset = { dx: x - gps.bx, dy: y - gps.by }; save('killa.offset', offset);
+      placeGps(); pinned = false; retarget(); updateFixLabel();
+      toast('Position fixed. GPS will now be shifted by ' + fmt(Math.hypot(offset.dx, offset.dy)) + ' m.');
+    } else {
+      pinned = true; target = { x: x, y: y, src: 'tap', acc: 0 };
+      setSheet(false); closeResults();
+    }
+    refreshPanel(); invalidate();
+  }
+
+  function setFollow(on) {
+    follow = on; $('btnFollow').setAttribute('aria-pressed', on ? 'true' : 'false');
+    if (on && gps) { view.x = gps.x; view.y = gps.y; invalidate(); }
+  }
+
+  // ---------- buttons ----------
+  $('btnLocate').addEventListener('click', function () {
+    if (watchId === null) startGps();
+    if (gps) {
+      pinned = false; retarget();
+      view.x = gps.x; view.y = gps.y; if (view.z < 1.2) view.z = 1.5;
+      refreshPanel(); invalidate();
+    } else toast('Looking for GPS… stay in the open.');
+  });
+  $('btnFollow').addEventListener('click', function () {
+    if (watchId === null) startGps();
+    setFollow(!follow);
+  });
+  $('btnIn').addEventListener('click', function () { zoomAt(W / 2, H / 2, 1.6); });
+  $('btnOut').addEventListener('click', function () { zoomAt(W / 2, H / 2, 1 / 1.6); });
+  $('btnBack').addEventListener('click', function () { pinned = false; retarget(); refreshPanel(); invalidate(); });
+  $('btnFix').addEventListener('click', function () {
+    if (offset.dx || offset.dy) {
+      offset = { dx: 0, dy: 0 }; save('killa.offset', offset);
+      placeGps(); retarget();
+      toast('Offset cleared.'); updateFixLabel(); refreshPanel(); invalidate(); return;
+    }
+    if (!gps) { toast('Start GPS first.'); return; }
+    calib = !calib; $('btnFix').classList.toggle('on', calib);
+    if (calib) toast('Tap the map where you really are standing.');
+  });
+  function updateFixLabel() { $('btnFix').textContent = (offset.dx || offset.dy) ? 'Clear offset' : 'Fix position'; }
+
+  // ---------- map layers panel ----------
+  function setLayer(l) {
+    layer = l; save('killa.layer', l);
+    $('attr').textContent = SRC[l] ? SRC[l].attr : '';
+    mem.clear(); pend = {}; queue.length = 0;
+    invalidate();
+  }
+  function updateAlignUi() {
+    var el = $('alignV'); if (!el) return;
+    if (av < 0) { el.textContent = ''; return; }
+    var s = shiftOf(av), n = S.villages[av].name;
+    el.textContent = (s.dx || s.dy) ? '· ' + n + ': ' + Math.abs(s.dx) + ' m ' + (s.dx >= 0 ? 'E' : 'W') + ', ' + Math.abs(s.dy) + ' m ' + (s.dy >= 0 ? 'N' : 'S') : '· ' + n + ': no shift';
+  }
+  function nudge(dx, dy) {
+    if (av < 0) return;
+    var s = shiftOf(av);
+    pshift[av] = { dx: +(s.dx + dx).toFixed(2), dy: +(s.dy + dy).toFixed(2) };
+    if (!pshift[av].dx && !pshift[av].dy) delete pshift[av];
+    save('killa.pshift', pshift); curShift = shiftOf(av);
+    placeGps(); retarget(); updateAlignUi(); refreshPanel(); invalidate();
+  }
+  $('btnLayers').addEventListener('click', function () {
+    var p = $('layers'); p.hidden = !p.hidden; this.setAttribute('aria-expanded', p.hidden ? 'false' : 'true'); this.classList.toggle('on', !p.hidden);
+  });
+  $('btnLayersX').addEventListener('click', function () { $('layers').hidden = true; $('btnLayers').classList.remove('on'); $('btnLayers').setAttribute('aria-expanded', 'false'); });
+  Array.prototype.forEach.call(document.querySelectorAll('input[name=bm]'), function (r) {
+    r.checked = r.value === layer;
+    r.addEventListener('change', function () { if (r.checked) setLayer(r.value); });
+  });
+  $('rngOp').value = Math.round(parcelOp * 100);
+  $('rngOp').addEventListener('input', function () { parcelOp = this.value / 100; save('killa.pop', parcelOp); invalidate(); });
+  $('chkSharp').checked = !!sharp;
+  $('chkSharp').addEventListener('change', function () { sharp = this.checked; save('killa.sharp', sharp); estCache = {}; renderVillages(); invalidate(); });
+  $('selStep').value = String(step);
+  $('selStep').addEventListener('change', function () { step = +this.value; save('killa.step', step); });
+  Array.prototype.forEach.call(document.querySelectorAll('#pad button'), function (b) {
+    b.addEventListener('click', function () { var d = b.getAttribute('data-d').split(','); nudge(+d[0] * step, +d[1] * step); });
+  });
+  $('btnAlignReset').addEventListener('click', function () { if (av >= 0 && pshift[av]) { delete pshift[av]; save('killa.pshift', pshift); curShift = ZERO; placeGps(); retarget(); updateAlignUi(); refreshPanel(); invalidate(); } });
+
+  // ======================================================================
+  // Offline maps: download one village at a time
+  // ======================================================================
+  var estCache = {}, dl = null;
+  function zlist(max) { var a = []; for (var z = 14; z <= max; z++) a.push(z); return a; }
+  function villageTiles(vi, ls, zs) {
+    var seen = {}, out = [], s = shiftOf(vi);
+    S.polys.forEach(function (p) {
+      if (p.v !== vi) return;
+      zs.forEach(function (z) {
+        var pad = z <= 15 ? 400 : z === 16 ? 200 : 60;
+        var a = C.toLL(p.minx + s.dx - pad, p.miny + s.dy - pad), b = C.toLL(p.maxx + s.dx + pad, p.maxy + s.dy + pad);
+        var x0 = Math.floor(lon2x(a[0], z)), x1 = Math.floor(lon2x(b[0], z)), y0 = Math.floor(lat2y(b[1], z)), y1 = Math.floor(lat2y(a[1], z));
+        for (var x = x0; x <= x1; x++) for (var y = y0; y <= y1; y++) {
+          for (var q = 0; q < ls.length; q++) {
+            var k = tkey(ls[q], z, x, y);
+            if (!seen[k]) { seen[k] = 1; out.push({ k: k, l: ls[q], z: z, x: x, y: y }); }
+          }
+        }
+      });
+    });
+    return out;
+  }
+  function wantLayers() { return $('chkStreet').checked ? ['sat', 'street'] : ['sat']; }
+  function estBytes(tiles) { return tiles.reduce(function (a, t) { return a + (load('killa.avg.' + t.l, 0) || SRC[t.l].avg); }, 0); }
+  function estimate(vi) {
+    var key = vi + '|' + sharp + '|' + $('chkStreet').checked;
+    if (!estCache[key]) { var t = villageTiles(vi, wantLayers(), zlist(sharp ? 19 : 18)); estCache[key] = { n: t.length, b: estBytes(t) }; }
+    return estCache[key];
+  }
+
+  function renderStorage() {
+    var used = stat.auto + stat.pin;
+    $('storBar').style.width = Math.min(100, used / CAP * 100) + '%';
+    $('storTxt').textContent = idb ? mb(used) + ' MB of 1000 MB used · villages ' + mb(stat.pin) + ' MB · viewed areas ' + mb(stat.auto) + ' MB'
+      : 'Offline storage is not available on this device.';
+  }
+  function renderVillages() {
+    var ul = $('vlist'); ul.textContent = '';
+    S.villages.forEach(function (v, vi) {
+      var li = document.createElement('li'), sp = document.createElement('span'), b = document.createElement('b'), sm = document.createElement('small');
+      var rec = vdl[vi], btn = document.createElement('button'), del = null;
+      b.textContent = v.name; sp.appendChild(b); sp.appendChild(sm);
+      if (rec) {
+        sm.textContent = (rec.partial ? 'Partly saved · ' : 'Saved · ') + mb(rec.bytes) + ' MB · ' + new Date(rec.t).toLocaleDateString();
+        btn.textContent = rec.partial ? 'Finish' : 'Update';
+        del = document.createElement('button'); del.className = 'btn'; del.textContent = 'Delete';
+        del.addEventListener('click', function () { deleteVillage(vi); });
+      } else {
+        var e = estimate(vi); sm.textContent = 'About ' + mb(e.b) + ' MB · ' + e.n + ' tiles';
+        btn.textContent = 'Download';
+      }
+      btn.className = 'btn' + (rec ? '' : ' primary');
+      btn.disabled = !!dl; if (del) del.disabled = !!dl;
+      btn.addEventListener('click', function () { startDownload(vi); });
+      var box = document.createElement('span'); box.style.display = 'flex'; box.style.gap = '6px';
+      box.appendChild(btn); if (del) box.appendChild(del);
+      li.appendChild(sp); li.appendChild(box); ul.appendChild(li);
+    });
+  }
+  function progress() {
+    if (!dl) { $('dlprog').hidden = true; return; }
+    $('dlprog').hidden = false;
+    $('dlBar').style.width = (dl.done / dl.tiles.length * 100) + '%';
+    $('dlTxt').textContent = S.villages[dl.vi].name + ': ' + dl.done + ' of ' + dl.tiles.length + ' tiles · ' + mb(dl.bytes) + ' MB' + (dl.fail ? ' · ' + dl.fail + ' failed' : '');
+  }
+
+  function startDownload(vi) {
+    if (dl) { toast('A download is already running.'); return; }
+    if (!idb) { toast('Offline storage is not available on this device.'); return; }
+    var ls = wantLayers(), tiles = villageTiles(vi, ls, zlist(sharp ? 19 : 18)), est = estBytes(tiles);
+    if (stat.auto + stat.pin + est > CAP) { toast('Not enough room under the 1000 MB limit. Delete another village or clear the viewed-area cache first.'); return; }
+    dl = { vi: vi, tiles: tiles, i: 0, done: 0, fail: 0, bytes: 0, cancel: false, streak: 0, got: { sat: [0, 0], street: [0, 0] } };
+    try { if (navigator.wakeLock) navigator.wakeLock.request('screen').catch(function () {}); } catch (e) {}
+    renderVillages(); progress();
+    var workers = []; for (var w = 0; w < 6; w++) workers.push(dlWorker(dl));
+    Promise.all(workers).then(function () { finishDownload(dl); });
+  }
+  function dlWorker(job) {
+    if (job.cancel || job.i >= job.tiles.length) return Promise.resolve();
+    var j = job.tiles[job.i++];
+    return metaGet(j.k).then(function (m) {
+      if (m) { job.bytes += m.size; return m.pin ? null : metaPin(j.k, m); }
+      var url = tileUrl(j.l, j.z, j.x, j.y);
+      return fetchTile(url).then(function (b) { return b || fetchTile(url); }).then(function (b) {
+        if (!b) { job.fail++; job.streak++; return; }
+        job.streak = 0;
+        return tilePut(j.k, b, 1).then(function (ok) { if (ok) { job.bytes += b.size; job.got[j.l][0]++; job.got[j.l][1] += b.size; } else job.fail++; });
+      });
+    }).then(function () {
+      job.done++;
+      if (job.streak >= 12 && !job.cancel) { job.cancel = true; job.why = navigator.onLine === false ? 'No internet connection.' : 'Map tiles could not be downloaded. Check your signal and try again.'; }
+      if (job.done % 5 === 0 || job.done === job.tiles.length) { progress(); renderStorage(); }
+      return dlWorker(job);
+    });
+  }
+  function finishDownload(job) {
+    ['sat', 'street'].forEach(function (l) { var g = job.got[l]; if (g[0] >= 20) save('killa.avg.' + l, Math.round(g[1] / g[0])); });
+    var partial = job.cancel || job.fail > 0;
+    vdl[job.vi] = { bytes: job.bytes, n: job.tiles.length, miss: job.fail, partial: partial, t: Date.now(), z: sharp ? 19 : 18, street: wantLayers().length > 1 };
+    save('killa.vdl', vdl);
+    dl = null; progress(); renderStorage(); estCache = {}; renderVillages(); invalidate();
+    toast(job.cancel ? (job.why || 'Stopped.') + ' What was saved is kept. Tap Finish to continue.' : partial ? job.fail + ' tiles could not be saved. Tap Finish to retry.' : S.villages[job.vi].name + ' saved for offline use.');
+  }
+  $('btnDlCancel').addEventListener('click', function () { if (dl) { dl.cancel = true; dl.why = 'Stopped.'; } });
+
+  function deleteVillage(vi) {
+    var all = ['sat', 'street'], zs = zlist(19), mine = villageTiles(vi, all, zs), keep = {};
+    Object.keys(vdl).forEach(function (o) { if (+o !== vi) villageTiles(+o, all, zs).forEach(function (t) { keep[t.k] = 1; }); });
+    var keys = mine.filter(function (t) { return !keep[t.k]; }).map(function (t) { return t.k; });
+    tileDel(keys).then(function () { delete vdl[vi]; save('killa.vdl', vdl); mem.clear(); renderStorage(); estCache = {}; renderVillages(); invalidate(); toast(S.villages[vi].name + ' removed from this phone.'); });
+  }
+  function clearWhere(pinToo) {
+    return new Promise(function (res) {
+      if (!idb) return res();
+      var keys = [];
+      try {
+        var c = idb.transaction('m').objectStore('m').openCursor();
+        c.onsuccess = function () { var cur = c.result; if (cur) { if (pinToo || !cur.value.pin) keys.push(cur.value.k); cur.continue(); } else tileDel(keys).then(res); };
+        c.onerror = function () { res(); };
+      } catch (e) { res(); }
+    });
+  }
+  function armed(btn, label, fn) {
+    var on = false;
+    btn.addEventListener('click', function () {
+      if (dl) { toast('Wait for the download to finish or stop it first.'); return; }
+      if (!on) { on = true; btn.textContent = 'Tap again to confirm'; setTimeout(function () { on = false; btn.textContent = label; }, 3000); return; }
+      on = false; btn.textContent = label; fn();
+    });
+  }
+  armed($('btnClrAuto'), 'Clear viewed-area cache', function () { clearWhere(false).then(function () { mem.clear(); renderStorage(); invalidate(); toast('Viewed-area cache cleared.'); }); });
+  armed($('btnClrAll'), 'Delete all offline maps', function () { clearWhere(true).then(function () { vdl = {}; save('killa.vdl', vdl); mem.clear(); estCache = {}; renderStorage(); renderVillages(); invalidate(); toast('All offline maps deleted.'); }); });
+  $('chkStreet').addEventListener('change', function () { estCache = {}; renderVillages(); });
+  $('offline').addEventListener('toggle', function () { if (this.open) { renderStorage(); renderVillages(); } });
+
+  // ---------- saved points ----------
+  function renderPoints() {
+    $('nSaved').textContent = points.length;
+    var ul = $('points'); ul.textContent = '';
+    points.slice().reverse().forEach(function (p, idx) {
+      var li = document.createElement('li'), sp = document.createElement('span'), b = document.createElement('b'), sm = document.createElement('small'), del = document.createElement('button');
+      b.textContent = p.village + '  ' + p.label;
+      sm.textContent = new Date(p.t).toLocaleString() + (p.acc != null ? ' · ±' + p.acc + ' m' : '');
+      sp.appendChild(b); sp.appendChild(sm);
+      del.textContent = '×'; del.setAttribute('aria-label', 'Delete point');
+      del.addEventListener('click', function () { points.splice(points.length - 1 - idx, 1); save('killa.points', points); renderPoints(); });
+      li.appendChild(sp); li.appendChild(del); ul.appendChild(li);
+    });
+  }
+  function csv() {
+    var rows = [['time', 'village', 'murabba', 'killa', 'label', 'lat', 'lon', 'accuracy_m', 'source']];
+    points.forEach(function (p) { rows.push([p.t, p.village, p.m, p.k, p.label, p.lat, p.lon, p.acc, p.src]); });
+    return rows.map(function (r) { return r.map(function (v) { v = v == null ? '' : String(v); return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; }).join(','); }).join('\n');
+  }
+  function savePoint() {
+    if (!target) { toast('Nothing to save yet. Tap the map or start GPS.'); return; }
+    var hit = lastRes && lastRes.inside[0], s = shiftOf(villageAt(target.x, target.y)), ll = C.toLL(target.x + s.dx, target.y + s.dy);
+    points.push({ t: new Date().toISOString(), village: hit ? S.villages[hit.p.v].name : '(outside)', m: hit ? hit.p.m : '', k: hit ? hit.p.k : '',
+      label: hit ? hit.p.label : '', lat: +ll[1].toFixed(6), lon: +ll[0].toFixed(6), acc: target.src === 'gps' ? Math.round(target.acc) : null, src: target.src });
+    save('killa.points', points); renderPoints(); toast('Saved ' + (hit ? hit.p.label : 'point') + '.');
+  }
+  $('btnSave').addEventListener('click', savePoint);
+  $('bSave').addEventListener('click', function (e) { e.stopPropagation(); savePoint(); });
+  $('btnCopy').addEventListener('click', function () {
+    var t = csv();
+    (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(function () { toast('CSV copied.'); }, function () { toast('Copy is blocked here. Use Download CSV.'); });
+  });
+  $('btnDl').addEventListener('click', function () {
+    var a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv()], { type: 'text/csv' }));
+    a.download = 'killa-points-' + new Date().toISOString().slice(0, 10) + '.csv'; document.body.appendChild(a); a.click(); a.remove();
+  });
+  var clearArmed = false;
+  $('btnClear').addEventListener('click', function () {
+    if (!clearArmed) { clearArmed = true; this.textContent = 'Tap again to clear'; var b = this; setTimeout(function () { clearArmed = false; b.textContent = 'Clear all'; }, 3000); return; }
+    points = []; save('killa.points', points); renderPoints(); clearArmed = false; this.textContent = 'Clear all';
+  });
+
+  // ---------- offline shell ----------
+  function netChip() {
+    var c = $('chipNet'), on = navigator.onLine !== false;
+    c.hidden = on;
+    if (on) { mem.forEach(function (e, k) { if (e.retry) mem.delete(k); }); invalidate(); }
+  }
+  window.addEventListener('online', netChip); window.addEventListener('offline', netChip);
+  function offlineChip() {
+    var c = $('chipData');
+    if (window.Capacitor) { c.hidden = true; return; }   // inside the APK everything is already on the phone
+    c.hidden = false;
+    if (/^https?:$/.test(location.protocol) && 'serviceWorker' in navigator) {
+      navigator.serviceWorker.register('sw.js').then(function () { return navigator.serviceWorker.ready; })
+        .then(function () { c.textContent = 'Offline ready'; c.className = 'chip ok'; }, function () { c.textContent = 'Data built in'; });
+    } else c.textContent = 'Data built in';
+    if (navigator.storage && navigator.storage.persist) navigator.storage.persist();
+  }
+
+  // ======================================================================
+  // Search: one box for coordinates, Google links and village + murabba/killa
+  // ======================================================================
+  var ALIASES = {
+    'Thathi Lal': ['thatti lal', 'thatti laal', 'thathi laal', 'thatilal'],
+    'Balil': ['balail', 'baleel'],
+    'Fatuhal Pur': ['fatuhalpur', 'fatehalpur', 'fateh al pur'],
+    'Kotla Kambohana': ['kotla kamboh', 'kotla kambohan', 'kotla kamboha'],
+    'Hamidpur Kanura': ['hamidpur', 'hamid pur kanura'],
+    'Waanchatta': ['wanchatta', 'wanchhatta', 'wanchata', 'wanchhata'],
+    'Bahawalpur Sukha': ['sukha', 'bahawal pur sukha']
+  };
+  function norm(s) { return String(s).toLowerCase().replace(/[^a-z0-9]/g, ''); }
+  var VKEYS = S.villages.map(function (v) { return [norm(v.name)].concat((ALIASES[v.name] || []).map(norm)); });
+  function lev(a, b) {
+    var m = a.length, n = b.length, d = [], i, j, prev, t;
+    for (j = 0; j <= n; j++) d[j] = j;
+    for (i = 1; i <= m; i++) {
+      prev = d[0]; d[0] = i;
+      for (j = 1; j <= n; j++) { t = d[j]; d[j] = Math.min(d[j] + 1, d[j - 1] + 1, prev + (a[i - 1] === b[j - 1] ? 0 : 1)); prev = t; }
+    }
+    return d[n];
+  }
+  function matchVillages(text) {
+    var n = norm(text); if (!n) return [];
+    var best = 99, out = [];
+    VKEYS.forEach(function (keys, i) {
+      var d = 99;
+      keys.forEach(function (k) {
+        var dd = k === n ? 0 : (n.length >= 3 && k.indexOf(n) === 0) ? 0.5 : lev(k, n);
+        if (dd < d) d = dd;
+      });
+      if (d < best) { best = d; out = [i]; } else if (d === best) out.push(i);
+    });
+    var tol = n.length <= 4 ? 1 : n.length <= 8 ? 2 : 3;
+    return best <= tol ? out : [];
+  }
+
+  function okLL(o) { return o && isFinite(o.lat) && isFinite(o.lon) && Math.abs(o.lat) <= 90 && Math.abs(o.lon) <= 180 ? o : null; }
+  function fixLatLon(a, b) {   // people paste lat,lon, but lon,lat happens: in Pakistan lon is 60 to 80 and lat is 20 to 40
+    if (Math.abs(a) >= 60 && Math.abs(a) <= 80 && Math.abs(b) >= 20 && Math.abs(b) <= 40) return { lat: b, lon: a };
+    return { lat: a, lon: b };
+  }
+  function parseCoord(t) {
+    var s = String(t).trim(), m;
+    m = s.match(/@(-?\d+(?:\.\d+)?),\s*(-?\d+(?:\.\d+)?)/) || s.match(/!3d(-?\d+(?:\.\d+)?)!4d(-?\d+(?:\.\d+)?)/) ||
+        s.match(/[?&](?:q|ll|query|destination|center)=(-?\d+(?:\.\d+)?)(?:,|%2C)\s*(-?\d+(?:\.\d+)?)/i);
+    if (m) return okLL(fixLatLon(+m[1], +m[2]));
+    if (/\//.test(s)) return null;                       // 21/3 is a parcel, not a point
+    var u = s.toUpperCase().replace(/[°º˚′’″”“'"]/g, ' ').replace(/[,;]/g, ' ');
+    if (/[A-DF-MO-RT-VX-Z]/.test(u)) return null;       // any letter other than N S E W: not a coordinate
+    var toks = u.match(/[NSEW]|-?\d+(?:\.\d+)?/g); if (!toks) return null;
+    var hemi = toks.filter(function (x) { return /[NSEW]/.test(x); }).length, groups = [], nums = [], pend = null;
+    if (hemi) {
+      toks.forEach(function (tk) {
+        if (/[NSEW]/.test(tk)) {
+          if (nums.length && !pend) { groups.push({ n: nums, h: tk }); nums = []; }
+          else if (nums.length && pend) { groups.push({ n: nums, h: pend }); nums = []; pend = tk; }
+          else pend = tk;
+        } else nums.push(+tk);
+      });
+      if (nums.length) groups.push({ n: nums, h: pend });
+    } else if (toks.length === 2) {
+      if (toks.every(function (x) { return x.indexOf('.') < 0; })) return null;   // two whole numbers: not a point
+      groups = [{ n: [+toks[0]], h: null }, { n: [+toks[1]], h: null }];
+    } else if (toks.length === 4) groups = [{ n: [+toks[0], +toks[1]], h: null }, { n: [+toks[2], +toks[3]], h: null }];
+    else if (toks.length === 6) groups = [{ n: toks.slice(0, 3).map(Number), h: null }, { n: toks.slice(3).map(Number), h: null }];
+    else return null;
+    if (groups.length !== 2) return null;
+    var vals = groups.map(function (g) {
+      var n = g.n; if (!n.length || n.length > 3) return NaN;
+      if (n.length > 1 && (n[1] < 0 || n[1] >= 60)) return NaN;
+      var v = Math.abs(n[0]) + (n[1] || 0) / 60 + (n[2] || 0) / 3600;
+      return (n[0] < 0 || g.h === 'S' || g.h === 'W') ? -v : v;
+    });
+    var h0 = groups[0].h, h1 = groups[1].h;
+    if (h0 && h1) {
+      var latFirst = /[NS]/.test(h0); if (latFirst === /[NS]/.test(h1)) return null;
+      return okLL(latFirst ? { lat: vals[0], lon: vals[1] } : { lat: vals[1], lon: vals[0] });
+    }
+    return okLL(fixLatLon(vals[0], vals[1]));
+  }
+  // "labar 21/3", "labar 21 3 1", "21/3", "labar 21", "labar"
+  function parseParcel(t) {
+    var s = String(t).trim().toLowerCase().replace(/[,;:]+/g, ' ');
+    var m = s.match(/^(.*?)\s*(\d[\d\s\/\-]*)$/); if (!m) return null;
+    var tail = m[2], nums = tail.trim().split(/[\s\/\-]+/).filter(Boolean).map(Number), v = m[1].trim();
+    if (!nums.length || nums.length > 3) return null;
+    if (!v && (nums.length < 2 || !/[\/\-]/.test(tail))) return null;
+    return { vtext: v, nums: nums };
+  }
+
+  function qmsg(t) {
+    var e = $('qmsg'); e.textContent = t; e.hidden = !t; clearTimeout(qmsg.h);
+    if (t) qmsg.h = setTimeout(function () { e.hidden = true; }, 7000);
+  }
+  function closeResults() { $('qres').hidden = true; }
+  function showList(items) {
+    var ul = $('qres'); ul.textContent = '';
+    items.slice(0, 40).forEach(function (it) {
+      var li = document.createElement('li'), b = document.createElement('button'), sm = document.createElement('small');
+      b.type = 'button'; b.textContent = it.text; sm.textContent = it.sub || ''; b.appendChild(sm);
+      b.addEventListener('click', function () { closeResults(); it.fn(); });
+      li.appendChild(b); ul.appendChild(li);
+    });
+    ul.hidden = false;
+  }
+  function settle() { userMoved = true; if (follow) setFollow(false); setSheet(false); refreshPanel(); invalidate(); }
+  function fitBox(minx, miny, maxx, maxy, fw, fh) {
+    var bw = Math.max(maxx - minx, 20), bh = Math.max(maxy - miny, 20);
+    view.x = (minx + maxx) / 2; view.y = (miny + maxy) / 2;
+    view.z = Math.max(0.12, Math.min(12, Math.min(W * fw / bw, H * fh / bh)));
+  }
+  function interior(p) {
+    if (C.inPoly(p, p.cx, p.cy)) return [p.cx, p.cy];
+    var bw = p.maxx - p.minx, bh = p.maxy - p.miny, n, i, j, x, y;
+    for (n = 3; n <= 15; n += 4) for (i = 0; i < n; i++) for (j = 0; j < n; j++) {
+      x = p.minx + (i + 0.5) * bw / n; y = p.miny + (j + 0.5) * bh / n;
+      if (C.inPoly(p, x, y)) return [x, y];
+    }
+    return [p.cx, p.cy];
+  }
+  function goParcel(p) {
+    var pt = interior(p);
+    pinned = true; target = { x: pt[0], y: pt[1], src: 'tap', acc: 0 };
+    fitBox(p.minx, p.miny, p.maxx, p.maxy, 0.6, 0.32);
+    settle(); toast(S.villages[p.v].name + ' ' + p.label);
+  }
+  function goBox(q) {
+    pinned = false; if (gps) retarget(); else target = null;
+    fitBox(q.minx, q.miny, q.maxx, q.maxy, 0.9, 0.5);
+    settle(); toast(S.villages[q.v].name + ' murabba ' + q.m);
+  }
+  function goVillage(i) {
+    var v = S.villages[i]; pinned = false; if (gps) retarget(); else target = null;
+    fitBox(v.minx, v.miny, v.maxx, v.maxy, 0.9, 0.55);
+    settle(); toast(v.name);
+  }
+  function goCoord(lat, lon) {
+    var xy = C.toXY(lon, lat), s = shiftOf(villageAt(xy[0], xy[1])), x = xy[0] - s.dx, y = xy[1] - s.dy;
+    pinned = true; target = { x: x, y: y, src: 'tap', acc: 0 };
+    view.x = x; view.y = y; if (view.z < 1.5) view.z = 2;
+    settle(); toast(lat.toFixed(5) + ', ' + lon.toFixed(5));
+  }
+
+  function runSearch(raw) {
+    var t = String(raw).trim(); closeResults(); qmsg('');
+    if (!t) return;
+    var c = parseCoord(t);
+    if (c) { goCoord(c.lat, c.lon); return; }
+    var p = parseParcel(t), vtext = p ? p.vtext : t, vs;
+    if (!vtext) { qmsg('Type a village and parcel, for example labar 21/3, or paste coordinates like 30.0612, 71.3921.'); return; }
+    vs = matchVillages(vtext);
+    if (!vs.length && p && !p.vtext) vs = S.villages.map(function (v) { return v.i; });
+    if (!vs.length) { qmsg('No village called “' + vtext + '”. Try labar 21/3 or 30.0612, 71.3921.'); return; }
+    if (!p) {
+      if (vs.length === 1) goVillage(vs[0]);
+      else showList(vs.map(function (i) { return { text: S.villages[i].name, fn: function () { goVillage(i); } }; }));
+      return;
+    }
+    var m = p.nums[0], k = p.nums.length > 1 ? p.nums[1] : null, sk = p.nums.length > 2 ? String(p.nums[2]) : null;
+    var vname = vs.length === 1 ? S.villages[vs[0]].name + ' ' : '';
+    if (k === null) {
+      var boxes = S.murabbas.filter(function (q) { return q.m === m && vs.indexOf(q.v) >= 0; });
+      if (!boxes.length) { qmsg(vname + 'murabba ' + m + ' not found.'); return; }
+      if (boxes.length === 1) goBox(boxes[0]);
+      else showList(boxes.map(function (q) { return { text: S.villages[q.v].name + ' murabba ' + q.m, fn: function () { goBox(q); } }; }));
+      return;
+    }
+    var found = S.polys.filter(function (q) { return vs.indexOf(q.v) >= 0 && q.m === m && q.k === k && (sk === null || String(q.sk).toLowerCase() === sk); });
+    if (!found.length) {
+      var has = S.murabbas.some(function (q) { return q.m === m && vs.indexOf(q.v) >= 0; });
+      qmsg(has ? vname + 'murabba ' + m + ' has no killa ' + k + (sk ? '/' + sk : '') + '.' : vname + 'murabba ' + m + ' not found.');
+      return;
+    }
+    if (found.length === 1) goParcel(found[0]);
+    else showList(found.map(function (q) { return { text: S.villages[q.v].name + '  ' + q.label, sub: Math.round(q.area) + ' m²', fn: function () { goParcel(q); } }; }));
+  }
+  $('sform').addEventListener('submit', function (e) { e.preventDefault(); runSearch($('q').value); $('q').blur(); });
+  $('q').addEventListener('input', function () { $('qclear').hidden = !this.value; });
+  $('q').addEventListener('keydown', function (e) { if (e.key === 'Escape') { closeResults(); qmsg(''); } });
+  $('qclear').addEventListener('click', function () { $('q').value = ''; $('qclear').hidden = true; closeResults(); qmsg(''); $('q').focus(); });
+
+  // ---------- init ----------
+  $('built').textContent = S.built || '';
+  updateFixLabel();
+  readColors();
+  if (window.matchMedia) window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function () { readColors(); invalidate(); });
+  window.addEventListener('resize', function () { resize(); });
+  if (window.ResizeObserver) new ResizeObserver(resize).observe(cv);
+  $('attr').textContent = SRC[layer] ? SRC[layer].attr : '';
+  resize(); fitAll(); invalidate();
+  renderPoints(); refreshPanel(); offlineChip(); netChip(); setSheet(false);
+  if (nativeGeo()) setTimeout(startGps, 700);   // inside the APK: ask for Location as soon as the app opens
+  idbOpen().then(function (d) { idb = d; return d ? statsLoad() : null; }).then(function () { renderStorage(); invalidate(); });
+  setInterval(function () { if (gps && target && target.src === 'gps') { var t = $('vInfo').textContent; if (t) refreshPanel(); } }, 5000);
+  // start GPS straight away when location is already allowed
+  if (navigator.permissions && navigator.permissions.query) {
+    navigator.permissions.query({ name: 'geolocation' }).then(function (r) { if (r.state === 'granted') startGps(); }, function () {});
+  }
+  window.__killa = { S: S, view: view, get target() { return target; }, get gps() { return gps; }, onFix: onFix, startGps: startGps,
+    get stat() { return stat; }, get mem() { return mem; }, villageTiles: villageTiles, startDownload: startDownload, get vdl() { return vdl; }, tkey: tkey, lon2x: lon2x, lat2y: lat2y,
+    get layer() { return layer; }, nudge: nudge, get pshift() { return pshift; },
+    parseCoord: parseCoord, parseParcel: parseParcel, runSearch: runSearch, matchVillages: matchVillages, setSheet: setSheet, get sheetOpen() { return sheetOpen; }, nativeGeo: nativeGeo };
+})();
+
+</script>
+</body>
+</html>
